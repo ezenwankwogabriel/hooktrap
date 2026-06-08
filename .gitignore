@@ -1,0 +1,5 @@
+# compiled binary
+hooktrap
+
+# captured requests (local data, not source code)
+.hooktrap.json
