@@ -18,8 +18,10 @@ type Request struct {
 	Timestamp time.Time         `json:"timestamp"`
 }
 
-func Start(port int) error {
-	http.HandleFunc("/", handleWebhook)
+func Start(port int, repo store.Repository) error {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebhook(w, r, repo)
+	})
 
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("Hooktrap listening on http://localhost%s\n", addr)
@@ -27,7 +29,7 @@ func Start(port int) error {
 	return http.ListenAndServe(addr, nil)
 }
 
-func handleWebhook(w http.ResponseWriter, r *http.Request) {
+func handleWebhook(w http.ResponseWriter, r *http.Request, repo store.Repository) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "could not read body", http.StatusBadRequest)
@@ -45,13 +47,18 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	printRequest(req)
 
-	store.Save(store.Request{
+	err1 := repo.Save(store.Request{
 		ID:        req.ID,
 		Method:    req.Method,
 		Headers:   req.Headers,
 		Body:      req.Body,
 		Timestamp: req.Timestamp,
 	})
+
+	if err1 != nil {
+		http.Error(w, "could not save request", http.StatusBadRequest)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))

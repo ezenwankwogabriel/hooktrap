@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ezenwankwogabriel/hooktrap/server"
+	"github.com/ezenwankwogabriel/hooktrap/store"
 	"github.com/ezenwankwogabriel/hooktrap/tunnel"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,8 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		// We'll write the server here next
-		if err := server.Start(port); err != nil {
+		repo := store.NewFileRepository(store.DefaultPath)
+		if err := server.Start(port, repo); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

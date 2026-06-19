@@ -11,7 +11,8 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all captured webhook requests",
 	Run: func(cmd *cobra.Command, args []string) {
-		requests, err := store.LoadAll()
+		fileRepository := store.NewFileRepository(store.DefaultPath)
+		requests, err := fileRepository.LoadAll()
 		if err != nil {
 			fmt.Println("No requests captured yet.")
 			return

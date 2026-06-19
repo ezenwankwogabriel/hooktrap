@@ -1,0 +1,204 @@
+diff --git a/cmd/clear.go b/cmd/clear.go
+index 66e1e7c..6d83057 100644
+--- a/cmd/clear.go
++++ b/cmd/clear.go
+@@ -4,6 +4,7 @@ import (
+ 	"fmt"
+ 	"os"
+ 
++	"github.com/ezenwankwogabriel/hooktrap/store"
+ 	"github.com/spf13/cobra"
+ )
+ 
+@@ -11,7 +12,7 @@ var clearCmd = &cobra.Command{
+ 	Use:   "clear",
+ 	Short: "Clear all captured requests",
+ 	Run: func(cmd *cobra.Command, args []string) {
+-		err := os.Remove(".hooktrap.json")
++		err := os.Remove(store.DefaultPath)
+ 		if err != nil {
+ 			if os.IsNotExist(err) {
+ 				fmt.Println("Nothing to clear.")
+diff --git a/cmd/export.go b/cmd/export.go
+index 69bf6d0..76aed34 100644
+--- a/cmd/export.go
++++ b/cmd/export.go
+@@ -21,7 +21,9 @@ var exportCmd = &cobra.Command{
+ 			os.Exit(1)
+ 		}
+ 
+-		requests, err := store.LoadAll()
++		fileRepository := store.NewFileRepository(store.DefaultPath)
++
++		requests, err := fileRepository.LoadAll()
+ 		if err != nil || len(requests) == 0 {
+ 			fmt.Println("No requests captured yet.")
+ 			os.Exit(1)
+diff --git a/cmd/list.go b/cmd/list.go
+index 28b8d13..2707655 100644
+--- a/cmd/list.go
++++ b/cmd/list.go
+@@ -11,7 +11,8 @@ var listCmd = &cobra.Command{
+ 	Use:   "list",
+ 	Short: "List all captured webhook requests",
+ 	Run: func(cmd *cobra.Command, args []string) {
+-		requests, err := store.LoadAll()
++		fileRepository := store.NewFileRepository(store.DefaultPath)
++		requests, err := fileRepository.LoadAll()
+ 		if err != nil {
+ 			fmt.Println("No requests captured yet.")
+ 			return
+diff --git a/cmd/replay.go b/cmd/replay.go
+index 896fe1e..03b3440 100644
+--- a/cmd/replay.go
++++ b/cmd/replay.go
+@@ -24,7 +24,9 @@ var replayCmd = &cobra.Command{
+ 			os.Exit(1)
+ 		}
+ 
+-		requests, err := store.LoadAll()
++		fileRepository := store.NewFileRepository(store.DefaultPath)
++		requests, err := fileRepository.LoadAll()
++
+ 		if err != nil || len(requests) == 0 {
+ 			fmt.Println("No requests captured yet.")
+ 			os.Exit(1)
+diff --git a/cmd/root.go b/cmd/root.go
+index 37310ef..dfe856b 100644
+--- a/cmd/root.go
++++ b/cmd/root.go
+@@ -5,6 +5,7 @@ import (
+ 	"os"
+ 
+ 	"github.com/ezenwankwogabriel/hooktrap/server"
++	"github.com/ezenwankwogabriel/hooktrap/store"
+ 	"github.com/ezenwankwogabriel/hooktrap/tunnel"
+ 	"github.com/spf13/cobra"
+ )
+@@ -33,7 +34,8 @@ var rootCmd = &cobra.Command{
+ 			}
+ 		}
+ 		// We'll write the server here next
+-		if err := server.Start(port); err != nil {
++		repo := store.NewFileRepository(store.DefaultPath)
++		if err := server.Start(port, repo); err != nil {
+ 			fmt.Fprintln(os.Stderr, err)
+ 			os.Exit(1)
+ 		}
+diff --git a/server/server.go b/server/server.go
+index 674bf61..b4468fa 100644
+--- a/server/server.go
++++ b/server/server.go
+@@ -18,8 +18,10 @@ type Request struct {
+ 	Timestamp time.Time         `json:"timestamp"`
+ }
+ 
+-func Start(port int) error {
+-	http.HandleFunc("/", handleWebhook)
++func Start(port int, repo store.Repository) error {
++	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
++		handleWebhook(w, r, repo)
++	})
+ 
+ 	addr := fmt.Sprintf(":%d", port)
+ 	fmt.Printf("Hooktrap listening on http://localhost%s\n", addr)
+@@ -27,7 +29,7 @@ func Start(port int) error {
+ 	return http.ListenAndServe(addr, nil)
+ }
+ 
+-func handleWebhook(w http.ResponseWriter, r *http.Request) {
++func handleWebhook(w http.ResponseWriter, r *http.Request, repo store.Repository) {
+ 	body, err := io.ReadAll(r.Body)
+ 	if err != nil {
+ 		http.Error(w, "could not read body", http.StatusBadRequest)
+@@ -45,7 +47,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
+ 
+ 	printRequest(req)
+ 
+-	store.Save(store.Request{
++	err1 := repo.Save(store.Request{
+ 		ID:        req.ID,
+ 		Method:    req.Method,
+ 		Headers:   req.Headers,
+@@ -53,6 +55,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
+ 		Timestamp: req.Timestamp,
+ 	})
+ 
++	if err1 != nil {
++		http.Error(w, "could not save request", http.StatusBadRequest)
++		return
++	}
++
+ 	w.WriteHeader(http.StatusOK)
+ 	w.Write([]byte("OK"))
+ }
+diff --git a/store/store.go b/store/store.go
+index 915de86..38fae84 100644
+--- a/store/store.go
++++ b/store/store.go
+@@ -6,6 +6,13 @@ import (
+ 	"time"
+ )
+ 
++const DefaultPath = ".hooktrap.json"
++
++type Repository interface {
++	Save(req Request) error
++	LoadAll() ([]Request, error)
++}
++
+ type Request struct {
+ 	ID        string            `json:"id"`
+ 	Method    string            `json:"method"`
+@@ -14,8 +21,12 @@ type Request struct {
+ 	Timestamp time.Time         `json:"timestamp"`
+ }
+ 
+-func Save(req Request) error {
+-	requests, err := LoadAll()
++type FileRepository struct {
++	path string
++}
++
++func (f *FileRepository) Save(req Request) error {
++	requests, err := f.LoadAll()
+ 	if err != nil {
+ 		requests = []Request{}
+ 	}
+@@ -27,11 +38,11 @@ func Save(req Request) error {
+ 		return err
+ 	}
+ 
+-	return os.WriteFile(".hooktrap.json", data, 0644)
++	return os.WriteFile(f.path, data, 0644)
+ }
+ 
+-func LoadAll() ([]Request, error) {
+-	data, err := os.ReadFile(".hooktrap.json")
++func (f *FileRepository) LoadAll() ([]Request, error) {
++	data, err := os.ReadFile(f.path)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -40,3 +51,7 @@ func LoadAll() ([]Request, error) {
+ 	err = json.Unmarshal(data, &requests)
+ 	return requests, err
+ }
++
++func NewFileRepository(path string) *FileRepository {
++	return &FileRepository{path: path}
++}
+diff --git a/tui/tui.go b/tui/tui.go
+index 87c273e..90db02a 100644
+--- a/tui/tui.go
++++ b/tui/tui.go
+@@ -14,7 +14,8 @@ type model struct {
+ }
+ 
+ func initialModel() model {
+-	requests, _ := store.LoadAll()
++	fileRepository := store.NewFileRepository(store.DefaultPath)
++	requests, _ := fileRepository.LoadAll()
+ 
+ 	return model{
+ 		requests: requests,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ezenwankwogabriel/hooktrap/store"
 	"github.com/spf13/cobra"
 )
 
@@ -11,7 +12,7 @@ var clearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "Clear all captured requests",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := os.Remove(".hooktrap.json")
+		err := os.Remove(store.DefaultPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				fmt.Println("Nothing to clear.")

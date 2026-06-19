@@ -14,7 +14,8 @@ type model struct {
 }
 
 func initialModel() model {
-	requests, _ := store.LoadAll()
+	fileRepository := store.NewFileRepository(store.DefaultPath)
+	requests, _ := fileRepository.LoadAll()
 
 	return model{
 		requests: requests,

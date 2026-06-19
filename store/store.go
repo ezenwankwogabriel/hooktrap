@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+const DefaultPath = ".hooktrap.json"
+
+type Repository interface {
+	Save(req Request) error
+	LoadAll() ([]Request, error)
+}
+
 type Request struct {
 	ID        string            `json:"id"`
 	Method    string            `json:"method"`
@@ -14,8 +21,12 @@ type Request struct {
 	Timestamp time.Time         `json:"timestamp"`
 }
 
-func Save(req Request) error {
-	requests, err := LoadAll()
+type FileRepository struct {
+	path string
+}
+
+func (f *FileRepository) Save(req Request) error {
+	requests, err := f.LoadAll()
 	if err != nil {
 		requests = []Request{}
 	}
@@ -27,11 +38,11 @@ func Save(req Request) error {
 		return err
 	}
 
-	return os.WriteFile(".hooktrap.json", data, 0644)
+	return os.WriteFile(f.path, data, 0644)
 }
 
-func LoadAll() ([]Request, error) {
-	data, err := os.ReadFile(".hooktrap.json")
+func (f *FileRepository) LoadAll() ([]Request, error) {
+	data, err := os.ReadFile(f.path)
 	if err != nil {
 		return nil, err
 	}
@@ -39,4 +50,8 @@ func LoadAll() ([]Request, error) {
 	var requests []Request
 	err = json.Unmarshal(data, &requests)
 	return requests, err
+}
+
+func NewFileRepository(path string) *FileRepository {
+	return &FileRepository{path: path}
 }

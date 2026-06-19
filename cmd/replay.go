@@ -24,7 +24,9 @@ var replayCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		requests, err := store.LoadAll()
+		fileRepository := store.NewFileRepository(store.DefaultPath)
+		requests, err := fileRepository.LoadAll()
+
 		if err != nil || len(requests) == 0 {
 			fmt.Println("No requests captured yet.")
 			os.Exit(1)
