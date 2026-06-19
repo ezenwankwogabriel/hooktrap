@@ -24,7 +24,6 @@ func Start(port int) (*Tunnel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not attach to bore output: %w", err)
 	}
-	// t.cmd.Stderr = t.cmd.Stdout // merge stderr into stdout pipe
 
 	if err := t.cmd.Start(); err != nil {
 		return nil, fmt.Errorf("could not start bore — is it installed? run: cargo install bore-cli\n%w", err)

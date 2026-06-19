@@ -30,7 +30,8 @@ hooktrap replay 2 --target http://localhost:9000
 ```
 
 ## Roadmap
-- [ ] Public URL via tunnel integration
+- [x] Public URL via tunnel integration
+- [x] Export requests as curl command
 - [ ] Terminal UI with request inspector
 - [ ] Webhook signature verification (Stripe, GitHub)
 - [ ] Export requests as curl commands
